@@ -656,6 +656,12 @@ async fn create_components(
 
     let statistics_manager = StatisticsManager::new();
 
+    // Inject the DNS resolver so statistics_manager can clear DNS caches
+    // under memory pressure (see check_memory_pressure).
+    statistics_manager
+        .set_dns_resolver(dns_resolver.clone())
+        .await;
+
     debug!("initializing dispatcher");
     let dispatcher = Arc::new(Dispatcher::new(
         outbound_manager.clone(),
