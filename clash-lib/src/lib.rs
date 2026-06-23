@@ -669,8 +669,19 @@ async fn create_components(
         dns_resolver.clone(),
         config.general.mode,
         statistics_manager.clone(),
-        config.experimental.and_then(|e| e.tcp_buffer_size),
+        config.experimental.as_ref().and_then(|e| e.tcp_buffer_size),
     ));
+
+    // Set AnyTLS buffer sizes from experimental config
+    if let Some(ref exp) = config.experimental {
+        let duplex = exp.anytls_duplex_buffer_size.unwrap_or(16 * 1024);
+        let relay = exp.anytls_relay_buffer_size.unwrap_or(4 * 1024);
+        crate::proxy::anytls::set_buffer_config(duplex, relay);
+
+        if let Some(cap) = exp.closed_flows_cap {
+            crate::app::dispatcher::set_closed_flows_cap(cap);
+        }
+    }
 
     debug!("initializing authenticator");
     let authenticator = Arc::new(auth::PlainAuthenticator::new(config.users));
