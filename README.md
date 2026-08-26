@@ -17,7 +17,7 @@ A custom protocol, rule based network proxy software.
 
 > # 🔧 ClashRS Stabilized Fork (v0.10.8)
 > 本 fork 基于 **Watfaq/clash-rs v0.10.8**，重点修复路由器/低内存场景下的稳定性问题（崩溃、死锁、任务泄漏、连接中断）。
-> 实测在 128MB 内存的 OpenWrt 路由器上连续运行稳定，适合透明代理部署。
+> 实测在 256MB 内存的 OpenWrt 路由器上连续运行稳定，适合透明代理部署。
 
 ## 相比上游，本 fork 修复了什么
 
@@ -36,7 +36,7 @@ A custom protocol, rule based network proxy software.
 
 ### 🧪 实测环境
 
-- 设备：DSG-AX3000（IPQ5018, 128MB RAM, OpenWrt）
+- 设备：DSG-AX3000（IPQ5018, 256MB RAM, OpenWrt）
 - 部署：透明代理（redir 7892 + tproxy 7893）+ fake-ip DNS
 - 结果：连续运行 30+ 天无崩溃、无死锁、内存稳定 17-19MB
 
