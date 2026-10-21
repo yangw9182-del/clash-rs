@@ -10,6 +10,13 @@ pre-build = [
 volumes = ["/var/run/docker.sock=/var/run/docker.sock", "/tmp=/tmp"] # Docker in docker
 passthrough = ["CLASH_GIT_REF", "CLASH_GIT_SHA", "GITHUB_REF", "GITHUB_SHA", "RUSTFLAGS", "RUST_LOG", "CLASH_DOCKER_TEST", "SENTRY_DSN", "RUSTC_BOOTSTRAP", "TS_AUTH_KEY", "RUSTC_WRAPPER", "SCCACHE_DIR"]
 
+# armv7 musleabihf: force use of the repo's .cross/Dockerfile so that
+# CC=clang / CXX=clang++ / AR=llvm-ar are set. Without this, cross uses its
+# built-in musl image, which has no `arm-linux-musleabihf-gcc`, and ring's
+# build script fails with ToolNotFound.
+[target.armv7-unknown-linux-musleabihf]
+dockerfile = ".cross/Dockerfile"
+
 [target.mips-unknown-linux-musl]
 image = "ghcr.io/cross-rs/mips-unknown-linux-musl:edge"
 

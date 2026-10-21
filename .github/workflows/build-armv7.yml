@@ -91,11 +91,20 @@ jobs:
 
       - name: Build clash-rs (armv7 musleabihf, no dashboard)
         run: |
+          # ring's build script needs a C compiler for the target. The
+          # built-in cross musl image ships clang but cc-rs looks for
+          # `arm-linux-musleabihf-gcc`, so pin CC/CXX/AR explicitly.
           cross build --release \
             --target armv7-unknown-linux-musleabihf \
             -p clash-rs \
             --no-default-features \
             -F standard,ring
+        env:
+          CC_armv7_unknown_linux_musleabihf: clang
+          CXX_armv7_unknown_linux_musleabihf: clang++
+          AR_armv7_unknown_linux_musleabihf: llvm-ar
+          CFLAGS_armv7_unknown_linux_musleabihf: "--target=armv7-unknown-linux-musleabihf"
+          CXXFLAGS_armv7_unknown_linux_musleabihf: "--target=armv7-unknown-linux-musleabihf"
 
       - name: Rename binary
         run: |
