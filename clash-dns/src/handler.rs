@@ -157,11 +157,56 @@ where
                     .map_err(|e| DNSError::QueryFailed(e.to_string()))?)
             }
             Err(e) => {
+                // The resolver reports a negative upstream answer (NXDOMAIN /
+                // SERVFAIL) with a marker prefix rather than a bare transport
+                // failure; mirror that rcode to the client so fake-ip-filtered
+                // names answer "does not exist" immediately instead of the
+                // client hanging until its own timeout (4-5s observed).
+                let msg = e.to_string();
+                if let Some(code) = negative_response_code(&msg) {
+                    debug!(
+                        "answering dns query {} with negative rcode {:?}",
+                        query.name(),
+                        code
+                    );
+                    metadata.response_code = code;
+                    metadata.recursion_available = true;
+                    let rv = MessageResponseBuilder::from_message_request(request)
+                        .build_no_records(metadata);
+                    return response_handle
+                        .send_response(rv)
+                        .await
+                        .map_err(|x| DNSError::QueryFailed(x.to_string()));
+                }
+
                 debug!("dns resolve error: {}", e);
-                Err(DNSError::QueryFailed(e.to_string()))
+                // Any other failure must still produce a response, otherwise
+                // the client gets nothing at all and waits for its timeout.
+                metadata.response_code = ResponseCode::ServFail;
+                metadata.recursion_available = true;
+                let rv = MessageResponseBuilder::from_message_request(request)
+                    .build_no_records(metadata);
+                response_handle
+                    .send_response(rv)
+                    .await
+                    .map_err(|x| DNSError::QueryFailed(x.to_string()))
             }
         }
     }
+}
+
+/// Marker produced by the resolver when the upstream answer carried a negative
+/// rcode. Keep in sync with
+/// `clash_lib::app::dns::resolver::NEGATIVE_RCODE_MARKER`.
+const NEGATIVE_RCODE_MARKER: &str = "clash-dns-rcode:";
+
+/// Extracts a negative response code from a resolver error message shaped
+/// `"<MARKER><rcode as u16>|..."`.
+fn negative_response_code(msg: &str) -> Option<ResponseCode> {
+    let rest = msg.split_once(NEGATIVE_RCODE_MARKER)?.1;
+    let digits = rest.split_once('|').map(|(d, _)| d)?;
+    let code = digits.trim().parse::<u16>().ok()?;
+    Some(<ResponseCode as From<u16>>::from(code))
 }
 
 #[async_trait]

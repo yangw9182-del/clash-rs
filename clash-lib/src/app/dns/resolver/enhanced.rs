@@ -30,6 +30,14 @@ use std::{
 use tokio::sync::RwLock;
 use tracing::{debug, error, instrument, trace, warn};
 
+/// Marker embedded in resolver error strings when the upstream answer was a
+/// negative response (NXDOMAIN / SERVFAIL) rather than a transport failure.
+/// Format: `<MARKER><rcode as u16>|rest of the message`.
+/// Consumed by `clash-dns` so the client gets the real rcode back instead of
+/// no answer at all (upstream bug: NXDOMAIN for fake-ip-filtered names was
+/// dropped, leaving clients to time out for 4-5s).
+pub const NEGATIVE_RCODE_MARKER: &str = "clash-dns-rcode:";
+
 pub struct EnhancedResolver {
     ipv6: AtomicBool,
     hosts: Option<trie::StringTrie<net::IpAddr>>,
@@ -352,6 +360,11 @@ impl EnhancedResolver {
     }
 
     /// guaranteed to return at least 1 IP address when Ok
+    ///
+    /// When the upstream answer carries a negative response code (NXDOMAIN /
+    /// SERVFAIL) the error string is prefixed with [`NEGATIVE_RCODE_MARKER`]
+    /// plus the code, so the DNS server layer can mirror the real rcode
+    /// instead of collapsing it into a generic failure.
     async fn lookup_ip(
         &self,
         host: &str,
@@ -370,6 +383,18 @@ impl EnhancedResolver {
         let result = self.exchange(&m).await?;
         let ip_list = EnhancedResolver::ip_list_of_message(&result);
         if ip_list.is_empty() {
+            // Preserve a negative upstream rcode (NXDOMAIN / SERVFAIL) in the
+            // error so the DNS server can answer the client instead of
+            // silently dropping the query.
+            let rcode = result.metadata.response_code;
+            if rcode != op::ResponseCode::NoError {
+                return Err(anyhow!(
+                    "{}{}|no record for hostname: {}",
+                    NEGATIVE_RCODE_MARKER,
+                    u16::from(rcode),
+                    host
+                ));
+            }
             return Err(anyhow!("no record for hostname: {}", host));
         }
         Ok(ip_list)
